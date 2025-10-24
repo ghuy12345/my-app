@@ -5,30 +5,48 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "utils/supabase/server";
 
-export async function login(formData: FormData) {
+// Type for the action state
+type ActionState = {
+  ok: boolean
+  message?: string
+}
+
+export async function login(prevState: ActionState | undefined, formData: FormData): Promise<ActionState> {
   const supabase = await createClient();
 
-  // type-casting here for convenience
-  // in practice, you should validate your inputs
-  const data = {
-    email: formData.get("email") as string,
-    password: formData.get("password") as string,
-  };
+  const email = formData.get("email") as string;
+  const password = formData.get("password") as string;
 
-  const { data: authData, error } = await supabase.auth.signInWithPassword(data);
-
-  if (error) {
-    redirect("/error");
+  // Validate inputs
+  if (!email || !password) {
+    return {
+      ok: false,
+      message: "Email and password are required.",
+    };
   }
 
-  if (!authData.user) {
-    redirect("/error");
+  const { data: authData, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error || !authData.user) {
+    console.error("Login error:", error);
+    return {
+      ok: false,
+      message: "Incorrect email or password.",
+    };
   }
 
   revalidatePath("/", "layout");
 
-  // For login, check if user has completed onboarding
+  // For login, check if user has completed onboarding and redirect
+  // This will throw a redirect, so it never returns
   await checkOnboardingAndRedirect(authData.user.id);
+
+  // TypeScript doesn't know checkOnboardingAndRedirect always redirects
+  // This return will never be reached but satisfies TypeScript
+  return { ok: true };
 }
 
 /**
@@ -62,12 +80,15 @@ async function checkOnboardingAndRedirect(userId: string) {
 export async function signup(formData: FormData) {
   const supabase = await createClient();
 
-  // type-casting here for convenience
-  // in practice, you should validate your inputs
+  // Validate inputs
   const firstName = formData.get("first-name") as string;
   const lastName = formData.get("last-name") as string;
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
+
+  if (!firstName || !lastName || !email || !password) {
+    throw new Error("All fields are required.");
+  }
 
   const data = {
     email: email,
@@ -82,14 +103,31 @@ export async function signup(formData: FormData) {
     },
   };
 
-  const { error } = await supabase.auth.signUp(data);
+  const { data: signUpData, error } = await supabase.auth.signUp(data);
 
   if (error) {
     console.error("Signup error:", error);
-    console.error("Full error details:", JSON.stringify(error, null, 2));
-    // Temporarily show error on screen for debugging
-    throw new Error(`Signup failed: ${error.message} | Code: ${error.code} | Status: ${error.status}`);
+
+    // Supabase returns "User already registered" when email confirmation is disabled
+    // See: https://supabase.com/docs/reference/javascript/auth-signup
+    if (error.message === "User already registered") {
+      throw new Error("This email is already registered. Please try logging in instead.");
+    }
+
+    if (error.message.toLowerCase().includes("password")) {
+      throw new Error(`Password error: ${error.message}`);
+    }
+
+    if (error.message.toLowerCase().includes("email")) {
+      throw new Error(`Email error: ${error.message}`);
+    }
+
+    throw new Error(`Signup failed: ${error.message}`);
   }
+
+  // Note: When email confirmation is enabled, Supabase may return a fake user object
+  // for existing users (security feature to prevent user enumeration)
+  // In this case, we still redirect to check-email page
 
   revalidatePath("/", "layout");
 

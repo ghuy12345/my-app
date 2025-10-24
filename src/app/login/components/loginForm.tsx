@@ -1,4 +1,7 @@
+"use client"
+
 import Link from "next/link"
+import { useFormState } from "react-dom"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -12,7 +15,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { login } from "@/lib/auth-actions"
 
+const initialState = {
+  ok: true,
+  message: "",
+}
+
 export function LoginForm() {
+  const [state, formAction] = useFormState(login, initialState)
+
   return (
     <Card className="mx-auto max-w-sm">
       <CardHeader>
@@ -22,8 +32,13 @@ export function LoginForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form action="">
+        <form action={formAction}>
             <div className="grid gap-4">
+              {state.message && !state.ok && (
+                <div className="rounded-md bg-red-50 p-3 text-sm text-red-800 border border-red-200">
+                  {state.message}
+                </div>
+              )}
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -43,7 +58,7 @@ export function LoginForm() {
                 </div>
                 <Input id="password" name="password" type="password" required />
               </div>
-              <Button type="submit" formAction={login} className="w-full">
+              <Button type="submit" className="w-full">
                 Login
               </Button>
             </div>

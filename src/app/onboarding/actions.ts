@@ -49,9 +49,6 @@ export async function createCompany(
   }
 
   try {
-    // Generate a unique 8-character invite code
-    const inviteCode = generateInviteCode()
-
     // Insert the new organization into the database
     const { data: org, error: insertError } = await supabase
       .from("orgs")
@@ -99,25 +96,6 @@ export async function createCompany(
       }
     }
 
-    // Now create invite code (user is super_admin now)
-    const { error: inviteError } = await supabase
-      .from("org_join_codes")
-      .insert({
-        org_id: org.id,
-        code: inviteCode,
-        expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year expiry
-        created_by: user.id,
-        created_at: new Date().toISOString(),
-      })
-
-    if (inviteError) {
-      console.error("Error creating invite code:", inviteError)
-      return {
-        ok: false,
-        message: "Failed to create invite code. Please try again.",
-      }
-    }
-
     // Add the user to the organization with super_admin role
     const { error: memberError } = await supabase
       .from("user_organizations")
@@ -136,7 +114,6 @@ export async function createCompany(
 
     // Revalidate and redirect to dashboard
     revalidatePath("/", "layout")
-    redirect("/dashboard")
   } catch (error) {
     console.error("Unexpected error:", error)
     return {
@@ -144,6 +121,9 @@ export async function createCompany(
       message: "An unexpected error occurred. Please try again.",
     }
   }
+
+  // Redirect outside try/catch to allow Next.js redirect to work
+  redirect("/dashboard")
 }
 
 /**
@@ -275,7 +255,6 @@ export async function joinCompany(
 
     // Revalidate and redirect to dashboard
     revalidatePath("/", "layout")
-    redirect("/dashboard")
   } catch (error) {
     console.error("Unexpected error:", error)
     return {
@@ -283,6 +262,9 @@ export async function joinCompany(
       message: "An unexpected error occurred. Please try again.",
     }
   }
+
+  // Redirect outside try/catch to allow Next.js redirect to work
+  redirect("/dashboard")
 }
 
 /**
